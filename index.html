@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ひきざん 補数ヒントつき（筆算）</title>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif;
+    background: #f0f0f0;
+    min-height: 100dvh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px 14px 36px;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 20px;
+    padding: 20px 14px 24px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.1);
+    text-align: center;
+    width: 100%;
+    max-width: 340px;
+  }
+
+  /* ★レベルボタン：3列×2段 */
+  .levelSection {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 20px;
+  }
+
+  .levelWrap {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+  }
+
+  .levelBtn {
+    font-size: 13px;
+    padding: 6px 4px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #fff;
+    color: #aaa;
+    font-weight: 800;
+    transition: all .15s;
+  }
+
+  .levelBtn.active {
+    background: #111;
+    color: #fff;
+    border-color: #111;
+  }
+
+  /* 問題エリア */
+  .problemWrap {
+    position: relative;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .problemInner {
+    position: relative;
+    display: inline-block;
+  }
+
+  /* ── 筆算レイアウト ─────────────────── */
+  #q {
+    display: inline-grid;
+    grid-template-columns: 1.2em 1.2em 1.2em; /* 演算子 / 十の位 / 一の位 */
+    column-gap: 6px;
+    row-gap: 4px;
+    font-size: clamp(46px, 12vw, 68px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: .02em;
+    padding-top: 40px;
+    text-align: right;
+  }
+
+  #q .cell {
+    text-align: right;
+    min-width: 1.2em;
+  }
+
+  /* 筆算の横棒：グリッドの3列を1本でぶち抜く */
+  #q .hbar {
+    grid-column: 1 / -1;
+    height: 4px;
+    background: #111;
+    margin-top: 8px;
+    border-radius: 2px;
+  }
+
+  /* 答えの段：横線の下に十分な余白を取る／位を揃えて表示 */
+  #q .ans {
+    margin-top: 14px;
+    color: #111;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity .28s ease, transform .28s ease;
+  }
+
+  #q.show-ans .ans {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ヒント（補数・一の位） */
+  .hint {
+    position: absolute;
+    font-size: clamp(20px, 5vw, 32px);
+    font-weight: 800;
+    line-height: 1;
+    color: #d14;
+    opacity: 0;
+    transform: translate(4px, 6px) scale(.85);
+    transition: opacity .22s ease, transform .22s ease;
+    pointer-events: none;
+  }
+
+  .hint.show {
+    opacity: 1;
+    transform: translate(4px, 0) scale(1);
+  }
+
+  /* つぎへボタン */
+  .btn {
+    display: block;
+    margin: 24px auto 0;
+    font-size: 20px;
+    padding: 11px 0;
+    width: 60%;
+    border: 0;
+    border-radius: 12px;
+    cursor: pointer;
+    background: #111;
+    color: #fff;
+    font-weight: 800;
+    transition: opacity .15s;
+  }
+
+  .btn:disabled {
+    opacity: .35;
+    cursor: default;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+
+    <div class="levelSection">
+      <div class="levelWrap">
+        <button class="levelBtn active" data-level="1">★1</button>
+        <button class="levelBtn" data-level="2">★2</button>
+        <button class="levelBtn" data-level="3">★3</button>
+      </div>
+      <div class="levelWrap">
+        <button class="levelBtn" data-level="4">★4</button>
+        <button class="levelBtn" data-level="5">★5</button>
+        <button class="levelBtn" data-level="6">★6</button>
+      </div>
+    </div>
+
+    <div id="mainArea">
+      <div class="problemWrap">
+        <div class="problemInner" id="problemInner">
+          <div id="hintLeft"  class="hint"></div>
+          <div id="hintRight" class="hint"></div>
+          <div id="q">
+            <!-- 上段：演算子なし / 十の位 / 一の位 -->
+            <span class="cell"></span>
+            <span class="cell" id="qTens"></span>
+            <span class="cell" id="qOnes"></span>
+            <!-- 下段：演算子「−」 / 空 / 引く数 -->
+            <span class="cell bot">−</span>
+            <span class="cell bot"></span>
+            <span class="cell bot" id="qSub"></span>
+            <!-- 筆算の横棒（1本の独立要素） -->
+            <span class="hbar"></span>
+            <!-- 答えの段：位を揃える -->
+            <span class="cell ans"></span>
+            <span class="cell ans" id="aTens"></span>
+            <span class="cell ans" id="aOnes"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn" id="mainBtn">つぎへ</button>
+
+  </div>
+
+<script>
+/* ── 問題プール ────────────────────────────── */
+
+// 繰り下がりなし（1x − y, ones >= y）
+const questionsNoBorrow = [
+  "11 − 1",
+  "12 − 1","12 − 2",
+  "13 − 1","13 − 2","13 − 3",
+  "14 − 1","14 − 2","14 − 3","14 − 4",
+  "15 − 1","15 − 2","15 − 3","15 − 4","15 − 5",
+  "16 − 1","16 − 2","16 − 3","16 − 4","16 − 5","16 − 6",
+  "17 − 1","17 − 2","17 − 3","17 − 4","17 − 5","17 − 6","17 − 7",
+  "18 − 1","18 − 2","18 − 3","18 − 4","18 − 5","18 − 6","18 − 7","18 − 8",
+  "19 − 1","19 − 2","19 − 3","19 − 4","19 − 5","19 − 6","19 − 7","19 − 8","19 − 9",
+];
+
+// 繰り下がりあり（ones < y）
+const questionsBorrow = [
+  "11 − 9","12 − 9","13 − 9","14 − 9","15 − 9","16 − 9","17 − 9","18 − 9",
+  "11 − 8","12 − 8","13 − 8","14 − 8","15 − 8","16 − 8","17 − 8",
+  "11 − 7","12 − 7","13 − 7","14 − 7","15 − 7","16 − 7",
+  "11 − 6","12 − 6","13 − 6","14 − 6","15 − 6",
+  "11 − 5","12 − 5","13 − 5","14 − 5",
+  "11 − 4","12 − 4","13 − 4",
+  "11 − 3","12 − 3",
+  "11 − 2",
+];
+
+const questionsAll = [...questionsNoBorrow, ...questionsBorrow];
+
+const levelPools = {
+  1: questionsNoBorrow,
+  2: questionsBorrow,
+  3: questionsAll,
+  4: questionsAll,
+  5: questionsAll,
+  6: questionsAll,
+};
+
+const sequences = {
+  1: ['new-problem', 'answer-only'],
+  2: ['new-problem', 'complement-only'],
+  3: ['new-problem', 'smart-show'],
+  4: ['new-problem', 'both-hints-stay'],
+  5: ['new-problem', 'hints-flash-to-answer'],
+  6: ['new-problem', 'answer-only'],
+};
+
+/* ── 状態変数 ─────────────────────────────── */
+let lastIndex    = -1;
+let currentLevel = 1;
+let stepIdx      = -1;
+let isFirstLoad  = true;
+let isAnimating  = false;
+let currentProb  = null;
+
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+/* ── ユーティリティ ──────────────────────── */
+function pickRandom(pool) {
+  if (pool.length === 1) return 0;
+  let i;
+  do { i = Math.floor(Math.random() * pool.length); } while (i === lastIndex);
+  lastIndex = i;
+  return i;
+}
+
+function parseQuestion(text) {
+  const [l, r] = text.split("−").map(s => Number(s.trim()));
+  return { left: l, right: r, ones: l % 10, complement: 10 - r, ans: l - r, isBorrow: (l % 10) < r };
+}
+
+/* ヒントを「対応する数字の右隣」に動的配置（筆算なので top も計算） */
+function positionHints() {
+  const inner = document.getElementById("problemInner").getBoundingClientRect();
+  const place = (hintId, refId) => {
+    const ref = document.getElementById(refId).getBoundingClientRect();
+    const el  = document.getElementById(hintId);
+    el.style.left = (ref.right - inner.left) + "px";
+    // 数字の縦中心にヒントの縦中心を合わせる
+    el.style.top  = (ref.top   - inner.top + ref.height / 2 - el.offsetHeight / 2) + "px";
+  };
+  place("hintLeft",  "qOnes"); // 上段「一の位」の右
+  place("hintRight", "qSub");  // 下段「引く数」の右
+}
+
+function hideAllInstant() {
+  ['hintLeft','hintRight'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.transition = 'none';
+    el.classList.remove('show');
+  });
+  const q = document.getElementById('q');
+  q.style.transition = 'none';
+  q.classList.remove('show-ans');
+  // .ans セルのトランジションもリセット
+  document.querySelectorAll('#q .ans').forEach(el => el.style.transition = 'none');
+}
+
+function restoreTransitions() {
+  ['hintLeft','hintRight'].forEach(id => {
+    document.getElementById(id).style.transition = '';
+  });
+  document.getElementById('q').style.transition = '';
+  document.querySelectorAll('#q .ans').forEach(el => el.style.transition = '');
+}
+
+function showAnswer()  { document.getElementById('q').classList.add('show-ans'); }
+function hideAnswer()  { document.getElementById('q').classList.remove('show-ans'); }
+
+/* ── 問題セット ──────────────────────────── */
+function setupProblem() {
+  const pool = levelPools[currentLevel];
+  const q    = pool[pickRandom(pool)];
+  currentProb = parseQuestion(q);
+
+  document.getElementById("qTens").textContent    = Math.floor(currentProb.left / 10) || "";
+  document.getElementById("qOnes").textContent    = currentProb.ones;
+  document.getElementById("qSub").textContent     = currentProb.right;
+  document.getElementById("hintLeft").textContent  = currentProb.ones;
+  document.getElementById("hintRight").textContent = currentProb.complement;
+  // 答えは位を揃えて表示（2桁なら十の位／一の位、1桁なら一の位のみ）
+  const a = currentProb.ans;
+  document.getElementById("aTens").textContent = a >= 10 ? Math.floor(a / 10) : "";
+  document.getElementById("aOnes").textContent = a % 10;
+
+  hideAllInstant();
+  requestAnimationFrame(() => { restoreTransitions(); positionHints(); });
+}
+
+/* ── トランジション ──────────────────────── */
+async function transitionNewProblem() {
+  const area = document.getElementById("mainArea");
+
+  hideAllInstant();
+  await wait(16);
+  restoreTransitions();
+
+  area.style.transition = "opacity .18s ease, transform .18s ease";
+  area.style.opacity    = "0";
+  area.style.transform  = "translateY(12px) scale(.97)";
+  await wait(200);
+
+  setupProblem();
+
+  area.style.transition = "none";
+  area.style.opacity    = "0";
+  area.style.transform  = "translateY(-12px) scale(.97)";
+  area.offsetHeight;
+
+  area.style.transition = "opacity .22s ease, transform .22s ease";
+  area.style.opacity    = "1";
+  area.style.transform  = "none";
+  await wait(240);
+}
+
+/* ── ステップ実行 ─────────────────────────── */
+async function executeStep(step) {
+  const hL = document.getElementById("hintLeft");
+  const hR = document.getElementById("hintRight");
+
+  if (step === 'answer-only') {
+    showAnswer();
+
+  } else if (step === 'complement-only') {
+    hR.classList.add("show");
+
+  } else if (step === 'smart-show') {
+    if (currentProb.isBorrow) hR.classList.add("show");
+    else                       showAnswer();
+
+  } else if (step === 'both-hints-stay') {
+    if (!currentProb.isBorrow) {
+      showAnswer();
+    } else {
+      hR.classList.add("show");
+      await wait(400);
+      hL.classList.add("show");
+    }
+
+  } else if (step === 'hints-flash-to-answer') {
+    if (!currentProb.isBorrow) {
+      showAnswer();
+    } else {
+      hR.classList.add("show");
+      await wait(300);
+      hR.classList.remove("show");
+      await wait(80);
+      hL.classList.add("show");
+      await wait(300);
+      hL.classList.remove("show");
+      await wait(160);
+      showAnswer();
+    }
+  }
+}
+
+/* ── メインハンドラ ──────────────────────── */
+async function handlePress() {
+  if (isAnimating) return;
+  isAnimating = true;
+  document.getElementById("mainBtn").disabled = true;
+
+  const seq = sequences[currentLevel];
+  stepIdx++;
+  if (stepIdx >= seq.length) stepIdx = 0;
+
+  const step = seq[stepIdx];
+
+  if (step === 'new-problem') {
+    if (isFirstLoad) { setupProblem(); isFirstLoad = false; }
+    else             { await transitionNewProblem(); }
+  } else {
+    await executeStep(step);
+  }
+
+  document.getElementById("mainBtn").disabled = false;
+  isAnimating = false;
+}
+
+/* ── レベル切り替え ──────────────────────── */
+document.querySelectorAll(".levelBtn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (isAnimating) return;
+    currentLevel = Number(btn.dataset.level);
+    document.querySelectorAll(".levelBtn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    stepIdx = -1; lastIndex = -1; isFirstLoad = false;
+    handlePress();
+  });
+});
+
+/* リサイズ時にヒント位置を再計算 */
+window.addEventListener("resize", () => { if (currentProb) positionHints(); });
+
+document.getElementById("mainBtn").addEventListener("click", handlePress);
+handlePress();
+</script>
+</body>
+</html>
